@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>МГТУ — AR-гид: Памятник Г.И. Носову</title>
+
+  <script src="https://cdn.jsdelivr.net/gh/aframevr/aframe@1.6.0/dist/aframe-master.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@master/aframe/build/aframe-ar.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --mgtu-dark-blue: #0B2A4A;
+      --mgtu-white: #FFFFFF;
+      --mgtu-accent: #4FA8D8;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: 'Inter', system-ui, sans-serif; overflow: hidden; }
+
+    .logo-badge {
+      position: fixed; top: 16px; left: 16px; width: 60px; height: 60px;
+      z-index: 20; background: var(--mgtu-white); border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35); overflow: hidden;
+    }
+    .logo-badge img { width: 80%; height: 80%; object-fit: contain; }
+    .logo-fallback { color: var(--mgtu-dark-blue); font-weight: 800; font-size: 0.8rem; letter-spacing: 0.5px; }
+
+    .info-card {
+      position: fixed; left: 50%; bottom: 28px; transform: translate(-50%, 24px);
+      width: min(92%, 420px); background: rgba(11, 42, 74, 0.94);
+      border: 1px solid rgba(255, 255, 255, 0.55); border-radius: 16px;
+      padding: 16px 20px; color: var(--mgtu-white);
+      opacity: 0; pointer-events: none; transition: opacity 0.4s ease, transform 0.4s ease;
+      z-index: 20; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4);
+    }
+    .info-card.visible { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+    .info-card h2 { margin: 0 0 6px; font-size: 1.05rem; font-weight: 700; }
+    .info-card h2 .accent { color: var(--mgtu-accent); }
+    .info-card p { margin: 0; font-size: 0.88rem; line-height: 1.45; opacity: 0.95; }
+
+    .hint-badge {
+      position: fixed; bottom: 16px; right: 16px; background: rgba(11, 42, 74, 0.85);
+      color: var(--mgtu-white); padding: 8px 14px; border-radius: 20px; font-size: 0.78rem;
+      z-index: 20; transition: opacity 0.3s ease; border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+    .hint-badge.hidden { opacity: 0; pointer-events: none; }
+
+    /* ---------- Информационные плашки (как на референсе) ---------- */
+    .tag {
+      position: fixed;
+      background: rgba(255, 255, 255, 0.96);
+      color: var(--mgtu-dark-blue);
+      padding: 7px 14px 7px 10px;
+      border-radius: 20px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(11, 42, 74, 0.15);
+      z-index: 18;
+      opacity: 0;
+      transform: translateY(10px) scale(0.9);
+      transition: opacity 0.4s ease, transform 0.4s ease;
+      white-space: nowrap;
+    }
+    .tag.visible { opacity: 1; transform: translateY(0) scale(1); }
+    .tag .icon {
+      width: 22px; height: 22px; border-radius: 50%;
+      background: var(--mgtu-dark-blue); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.7rem; flex-shrink: 0;
+    }
+    .tag.accent .icon { background: var(--mgtu-accent); }
+
+    #tag-history  { top: 24%; left: 8%; transition-delay: 0.1s; }
+    #tag-institutes { top: 19%; right: 8%; transition-delay: 0.25s; }
+    #tag-students { top: 52%; right: 6%; transition-delay: 0.4s; }
+
+    /* ---------- Искры (декоративный эффект) ---------- */
+    .sparkle {
+      position: fixed; border-radius: 50%; background: #FFE9A8;
+      box-shadow: 0 0 6px 2px rgba(255, 232, 160, 0.8);
+      opacity: 0; pointer-events: none; z-index: 16;
+      animation: sparkle-twinkle ease-in-out infinite;
+    }
+    @keyframes sparkle-twinkle {
+      0%, 100% { opacity: 0; transform: scale(0.4); }
+      50% { opacity: 1; transform: scale(1.1); }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="logo-badge">
+    <img src="logo.png" alt="Логотип МГТУ"
+         onerror="this.parentElement.innerHTML='<span class=&quot;logo-fallback&quot;>МГТУ</span>'">
+  </div>
+
+  <div class="info-card" id="info-card">
+    <h2>Памятник <span class="accent">Г.И. Носову</span></h2>
+    <p>
+      У главного входа в университет. МГТУ основан в 1934 году как горно-металлургический
+      институт, а с 1951 года носит имя Г.И. Носова — легендарного директора Магнитогорского
+      металлургического комбината. Сегодня это многопрофильный вуз: 9 институтов и около
+      14 000 студентов.
+    </p>
+  </div>
+
+  <div class="hint-badge" id="hint">Наведите камеру на маркер</div>
+
+  <div class="tag" id="tag-history"><span class="icon">🏛</span>1934 — год основания</div>
+  <div class="tag accent" id="tag-institutes"><span class="icon">🎓</span>9 институтов</div>
+  <div class="tag" id="tag-students"><span class="icon">👥</span>14 000+ студентов</div>
+
+  <div id="sparkle-container"></div>
+
+  <!--
+    МАРКЕР — стандартный встроенный Hiro.
+    Картинку маркера легко найти по запросу "AR.js hiro marker" и распечатать.
+  -->
+  <a-scene
+    embedded
+    arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix;"
+    vr-mode-ui="enabled: false"
+    renderer="logarithmicDepthBuffer: true;"
+  >
+    <a-entity light="type: ambient; color: #FFFFFF; intensity: 0.95"></a-entity>
+    <a-entity light="type: directional; color: #FFFFFF; intensity: 0.55" position="1 1.5 1"></a-entity>
+
+    <a-marker preset="hiro" marker-handler>
+
+      <!--
+        Вся сцена масштабируется одним числом через campus-group.
+        Если здание окажется повёрнуто "не той стороной" или лежит
+        набок — это типично для моделей из фотограмметрии/сканов,
+        поправьте rotation у #mgtu-building (один параметр).
+      -->
+      <a-entity id="campus-group" scale="0.6 0.6 0.6">
+
+        <!-- Платформа — простой тёмно-синий "стенд" под зданием и ёлками -->
+        <a-cylinder radius="0.95" height="0.02" color="#0B2A4A" position="0 0 0"
+                    segments-radial="32"></a-cylinder>
+
+        <!--
+          ЗДАНИЕ МГТУ — стилизованное, собранное из примитивов.
+          Это надёжный вариант (не зависит от внешних файлов). Если
+          вы пришлёте более качественную найденную 3D-модель — заменю
+          этот блок на gltf-model с вашим файлом.
+        -->
+        <a-entity id="mgtu-building" position="0 0 0">
+
+          <!-- Боковые крылья -->
+          <a-box width="0.32" height="0.42" depth="0.42" position="-0.46 0.21 0" color="#FAFAF6"></a-box>
+          <a-box width="0.32" height="0.42" depth="0.42" position="0.46 0.21 0" color="#FAFAF6"></a-box>
+          <a-box width="0.34" height="0.05" depth="0.44" position="-0.46 0.445 0" color="#0B2A4A"></a-box>
+          <a-box width="0.34" height="0.05" depth="0.44" position="0.46 0.445 0" color="#0B2A4A"></a-box>
+
+          <!-- Центральный корпус (2 этажа) -->
+          <a-box width="0.62" height="0.62" depth="0.46" position="0 0.31 0" color="#FAFAF6"></a-box>
+
+          <!-- Крыша центрального корпуса -->
+          <a-cone radius-bottom="0.46" radius-top="0" height="0.24" segments-radial="4"
+                  rotation="0 45 0" position="0 0.74 0" color="#0B2A4A"></a-cone>
+
+          <!-- Эмблема на фронтоне -->
+          <a-circle radius="0.05" position="0 0.66 0.231" color="#FFFFFF" side="double"></a-circle>
+          <a-text value="М" align="center" color="#0B2A4A" width="1.6" position="0 0.66 0.232"></a-text>
+
+          <!-- Окна, 1 этаж -->
+          <a-box width="0.045" height="0.09" depth="0.01" color="#0B2A4A" position="-0.2 0.16 0.236"></a-box>
+          <a-box width="0.045" height="0.09" depth="0.01" color="#0B2A4A" position="-0.08 0.16 0.236"></a-box>
+          <a-box width="0.045" height="0.09" depth="0.01" color="#0B2A4A" position="0.08 0.16 0.236"></a-box>
+          <a-box width="0.045" height="0.09" depth="0.01" color="#0B2A4A" position="0.2 0.16 0.236"></a-box>
+          <!-- Окна, 2 этаж -->
+          <a-box width="0.045" height="0.09" depth="0.01" color="#0B2A4A" position="-0.2 0.42 0.236"></a-box>
+          <a-box width="0.045" height="0.09" depth="0.01" color="#0B2A4A" position="-0.08 0.42 0.236"></a-box>
+          <a-box width="0.045" height="0.09" depth="0.01" color="#0B2A4A" position="0.08 0.42 0.236"></a-box>
+          <a-box width="0.045" height="0.09" depth="0.01" color="#0B2A4A" position="0.2 0.42 0.236"></a-box>
+
+          <!-- Окна крыльев -->
+          <a-box width="0.045" height="0.08" depth="0.01" color="#0B2A4A" position="-0.46 0.24 0.216"></a-box>
+          <a-box width="0.045" height="0.08" depth="0.01" color="#0B2A4A" position="0.46 0.24 0.216"></a-box>
+
+          <!-- Колонны портика -->
+          <a-cylinder radius="0.018" height="0.34" color="#ECECEC" position="-0.16 0.17 0.25"></a-cylinder>
+          <a-cylinder radius="0.018" height="0.34" color="#ECECEC" position="-0.05 0.17 0.25"></a-cylinder>
+          <a-cylinder radius="0.018" height="0.34" color="#ECECEC" position="0.05 0.17 0.25"></a-cylinder>
+          <a-cylinder radius="0.018" height="0.34" color="#ECECEC" position="0.16 0.17 0.25"></a-cylinder>
+          <a-box width="0.5" height="0.03" depth="0.06" position="0 0.355 0.25" color="#ECECEC"></a-box>
+
+          <!-- Дверь -->
+          <a-box width="0.09" height="0.16" depth="0.02" position="0 0.08 0.255" color="#0B2A4A"></a-box>
+
+          <!-- Флагшток и флаг -->
+          <a-cylinder radius="0.006" height="0.3" color="#999999" position="0 1.0 0"></a-cylinder>
+          <a-plane width="0.1" height="0.06" color="#4FA8D8" position="0.05 1.1 0" side="double"></a-plane>
+        </a-entity>
+
+        <!-- ЁЛОЧКИ — настоящая 3D-модель, размещена несколько раз -->
+        <a-entity id="tree-container"></a-entity>
+
+      </a-entity>
+    </a-marker>
+
+    <a-entity camera></a-entity>
+  </a-scene>
+
+  <script>
+    // ------------------------------------------------------------
+    // ЁЛОЧКИ — позиция (x,z) и масштаб для каждого экземпляра модели.
+    // Координаты подобраны так, чтобы ёлки стояли по периметру
+    // площадки вокруг здания, не пересекая его.
+    // ------------------------------------------------------------
+    var TREES = [
+      { x: -0.65, z: 0.45,  scale: 1.0  },
+      { x: 0.65,  z: 0.45,  scale: 0.85 },
+      { x: -0.65, z: -0.4,  scale: 0.95 },
+      { x: 0.65,  z: -0.4,  scale: 1.1  },
+      { x: 0.3,   z: 0.78,  scale: 0.75 }
+    ];
+
+    // Точка "опоры" модели ёлки относительно её центра (известна по
+    // факту замера модели) — используется, чтобы ствол стоял на
+    // площадке, а не "парил" или "тонул" в ней.
+    var TREE_BASE_Y = 0.474;
+
+    function buildTrees() {
+      var container = document.getElementById('tree-container');
+      TREES.forEach(function (t) {
+        var tree = document.createElement('a-entity');
+        tree.setAttribute('gltf-model', 'models/pine-tree.glb');
+        tree.setAttribute('scale', t.scale + ' ' + t.scale + ' ' + t.scale);
+        tree.setAttribute('position', t.x + ' ' + (TREE_BASE_Y * t.scale) + ' ' + t.z);
+        container.appendChild(tree);
+      });
+    }
+
+    document.querySelector('a-scene').addEventListener('loaded', buildTrees);
+
+    // ------------------------------------------------------------
+    // ИСКРЫ — декоративный эффект (как золотые блёстки на референсе).
+    // Каждая искра — точка с разным размером/положением/задержкой.
+    // ------------------------------------------------------------
+    var SPARKLES = [
+      { x: 20, y: 30, size: 5,  delay: 0,   duration: 2.2 },
+      { x: 78, y: 22, size: 4,  delay: 0.6, duration: 2.6 },
+      { x: 30, y: 60, size: 3,  delay: 1.2, duration: 2.0 },
+      { x: 85, y: 55, size: 5,  delay: 0.3, duration: 2.4 },
+      { x: 60, y: 18, size: 3,  delay: 1.6, duration: 2.8 },
+      { x: 12, y: 48, size: 4,  delay: 0.9, duration: 2.3 }
+    ];
+
+    function buildSparkles() {
+      var container = document.getElementById('sparkle-container');
+      SPARKLES.forEach(function (s) {
+        var el = document.createElement('div');
+        el.className = 'sparkle';
+        el.style.left = s.x + '%';
+        el.style.top = s.y + '%';
+        el.style.width = s.size + 'px';
+        el.style.height = s.size + 'px';
+        el.style.animationDelay = s.delay + 's';
+        el.style.animationDuration = s.duration + 's';
+        container.appendChild(el);
+      });
+    }
+    buildSparkles();
+
+    AFRAME.registerComponent('marker-handler', {
+      init: function () {
+        var infoCard = document.getElementById('info-card');
+        var hint = document.getElementById('hint');
+        var tags = [
+          document.getElementById('tag-history'),
+          document.getElementById('tag-institutes'),
+          document.getElementById('tag-students')
+        ];
+
+        this.el.addEventListener('markerFound', function () {
+          infoCard.classList.add('visible');
+          hint.classList.add('hidden');
+          tags.forEach(function (t) { t.classList.add('visible'); });
+        });
+
+        this.el.addEventListener('markerLost', function () {
+          infoCard.classList.remove('visible');
+          hint.classList.remove('hidden');
+          tags.forEach(function (t) { t.classList.remove('visible'); });
+        });
+      }
+    });
+  </script>
+
+</body>
+</html>
